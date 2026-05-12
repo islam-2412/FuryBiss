@@ -1,0 +1,105 @@
+# 1. تسطيب إصدارات بايثون وأداة binutils
+!sudo add-apt-repository ppa:deadsnakes/ppa -y > /dev/null 2>&1
+!sudo apt-get update > /dev/null 2>&1
+!sudo apt-get install python3.9 python3.10 python3.11 python3.12 python3.13 python3.14 binutils -y > /dev/null 2>&1
+
+import os
+import subprocess
+import shutil
+
+# ==========================================
+# إعدادات ملف control
+# ==========================================
+PKG_NAME = "enigma2-plugin-extensions-furybiss"
+PKG_VERSION = "4.1"
+PKG_ARCH = "all"
+MAINTAINER = "Islam Salama"
+DESCRIPTION = "FuryBiss - BISS keys and satellite feeds for Enigma2"
+
+py_files = ['__init__.py', 'plugin.py', 'web_server.py']
+extra_files = ['plugin.png'] 
+# 👈 تم تحديد أسماء الأيقونات الفردية هنا بناءً على صورتك
+icon_files = ['clock.png','dish.png','film.png','key.png','info_hint.png', 'menu.png','satellite.png']
+version_file = 'version.txt'
+versions = ['3.9', '3.10', '3.11', '3.12', '3.13', '3.14']
+
+os.makedirs('IPK_Output', exist_ok=True)
+print("🚀 جاري البدء في التشفير وبناء ملفات IPK...")
+
+for v in versions:
+    build_dir = f'build_py{v}'
+    plugin_path = f'{build_dir}/usr/lib/enigma2/python/Plugins/Extensions/FuryBiss'
+    control_path = f'{build_dir}/CONTROL'
+    
+    os.makedirs(plugin_path, exist_ok=True)
+    os.makedirs(control_path, exist_ok=True)
+    
+    # 1. تشفير ملفات py إلى pyc
+    for f in py_files:
+        if os.path.exists(f):
+            out_file = f"{plugin_path}/{f.replace('.py', '.pyc')}"
+            cmd = f"python{v} -O -c \"import py_compile; py_compile.compile('{f}', cfile='{out_file}', doraise=True)\""
+            res = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+            
+            if res.returncode != 0:
+                print(f"❌ فشل تشفير ملف '{f}' لإصدار بايثون {v}: {res.stderr}")
+        else:
+            print(f"⚠️ تحذير: ملف المصدري '{f}' غير موجود!")
+
+    # 2. نسخ الصور والملفات الإضافية
+    for ext_file in extra_files:
+        if os.path.exists(ext_file):
+            shutil.copy(ext_file, f"{plugin_path}/{ext_file}")
+        else:
+            print(f"⚠️ تحذير: الملف الإضافي '{ext_file}' غير موجود في بيئة العمل!")
+
+    # 3. إنشاء مجلد icon ونسخ الأيقونات داخله
+    icon_dest_dir = f"{plugin_path}/icon"
+    os.makedirs(icon_dest_dir, exist_ok=True) # إنشاء الفولدر داخل البلوجن
+    for icon in icon_files:
+        if os.path.exists(icon):
+            shutil.copy(icon, f"{icon_dest_dir}/{icon}") # نسخ الصورة لداخل الفولدر الجديد
+        else:
+            print(f"⚠️ تحذير: أيقونة '{icon}' غير موجودة وتم تخطيها!")
+
+    # 4. التعامل مع ملف version.txt
+    if os.path.exists(version_file):
+        shutil.copy(version_file, f"{plugin_path}/{version_file}")
+    else:
+        with open(f"{plugin_path}/{version_file}", "w") as f_v:
+            f_v.write(PKG_VERSION)
+
+    # 5. إنشاء ملف control تلقائياً
+    control_content = f"""Package: {PKG_NAME}
+Version: {PKG_VERSION}
+Description: {DESCRIPTION}
+Section: extra
+Priority: optional
+Maintainer: {MAINTAINER}
+Architecture: {PKG_ARCH}
+OE: {PKG_NAME}
+Homepage: https://t.me/yassin117
+Depends: 
+"""
+    with open(f"{control_path}/control", "w") as f_ctrl:
+        f_ctrl.write(control_content)
+
+    # 6. بناء ملف الـ IPK النهائي
+    subprocess.run(["tar", "-czvf", "data.tar.gz", "-C", build_dir, "usr"], capture_output=True)
+    subprocess.run(["tar", "-czvf", "control.tar.gz", "-C", control_path, "control"], capture_output=True)
+    with open("debian-binary", "w") as f_db:
+        f_db.write("2.0\n")
+    
+    ipk_filename = f"IPK_Output/furybiss_{v}.ipk"
+    subprocess.run(["ar", "-r", ipk_filename, "debian-binary", "control.tar.gz", "data.tar.gz"], capture_output=True)
+    
+    # 7. تنظيف
+    shutil.rmtree(build_dir)
+    for temp_file in ["data.tar.gz", "control.tar.gz", "debian-binary"]:
+        if os.path.exists(temp_file):
+            os.remove(temp_file)
+
+    print(f"✅ تم بناء: furybiss_{v}.ipk")
+
+subprocess.run(["zip", "-r", "FuryBiss_IPKs.zip", "IPK_Output"], capture_output=True)
+print("\n🎉 تم الانتهاء بنجاح! جميع ملفات الـ IPK تحتوي الآن على مجلد icon وبداخله الأيقونات.")
