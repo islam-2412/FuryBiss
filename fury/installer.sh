@@ -100,10 +100,10 @@ if [ -n "$REMOTE_VERSION" ] && [ -n "$LOCAL_VERSION" ]; then
     echo "Installed version: $LOCAL_VERSION"
     echo "Server version   : $REMOTE_VERSION"
     if ! version_newer_than "$REMOTE_VERSION" "$LOCAL_VERSION"; then
-        echo "FuryBiss is already up to date. Nothing to install."
-        exit 0
+        echo "FuryBiss is the same or newer version, forcing reinstallation anyway..."
+    else
+        echo "New version detected. Updating now..."
     fi
-    echo "New version detected. Updating now..."
 else
     echo "Version check info is incomplete. Continuing with installation..."
 fi
@@ -113,14 +113,14 @@ echo ""
 echo "Removing old versions of FuryBiss completely..."
 sleep 1
 
-# تنظيف مجلد tmp من أي ملفات تثبيت سابقة للإضافة
+# Clean the tmp directory from any previous installation files for the plugin
 rm -f /tmp/furybiss_*.ipk
 
-# إزالة الحزم القديمة مع فرض تجاوز الاعتماديات لتجنب توقف عملية الحذف
+# Remove old packages with force-depends to avoid the uninstallation process getting stuck
 opkg remove enigma2-plugin-extensions-furybiss --force-depends > /dev/null 2>&1
 opkg remove enigma2-plugin-extensions-furybis --force-depends > /dev/null 2>&1
 
-# التأكد من حذف المجلد بالكامل
+# Ensure the plugin directory is completely deleted
 if [ -d "$PLUGIN_DIR" ] ; then
     rm -rf "$PLUGIN_DIR"
     echo "- Old folder /FuryBiss deleted permanently."
@@ -131,20 +131,21 @@ echo ""
 
 # 6. Download the package that matches the Python version AND Architecture
 cd /tmp || exit 1
-# دمج المعمارية وإصدار البايثون في اسم الملف
+
+# Combine architecture and Python version in the file name
 FILE_NAME="furybiss_${PY_VER}_${ARCH}.ipk"
 DOWNLOAD_URL="${REPO_BASE_URL}/${FILE_NAME}"
 
 echo "Downloading FuryBiss package for Python ${PY_VER} (${ARCH})..."
 
-# التحميل باستخدام curl مع وجود wget كبديل
+# Download using curl, with wget as a fallback
 if command -v curl >/dev/null 2>&1; then
     curl -fSLk "${DOWNLOAD_URL}" -o "/tmp/${FILE_NAME}"
 else
     wget -q --no-check-certificate "${DOWNLOAD_URL}" -O "/tmp/${FILE_NAME}"
 fi
 
-# التحقق من وجود الملف وحجمه
+# Check if the file exists and verify its size
 if [ ! -s "/tmp/${FILE_NAME}" ] || [ $(stat -c%s "/tmp/${FILE_NAME}") -lt 1000 ]; then
     echo "Error: Failed to download ${FILE_NAME} or file is corrupted."
     echo "Please check if the file exists on the GitHub repository."
