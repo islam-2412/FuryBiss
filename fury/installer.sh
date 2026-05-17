@@ -50,7 +50,7 @@ fi
 echo "Detected Python Version: $PY_VER"
 
 case $PY_VER in
-    3.9|3.10|3.11|3.12|3.13|3.14|3.15)
+   2.7|3.9|3.10|3.11|3.12|3.13|3.14|3.15)
         echo "Python $PY_VER is supported. Proceeding..."
         ;;
     *)
