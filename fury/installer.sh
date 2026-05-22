@@ -11,12 +11,15 @@ REMOTE_VERSION_URL="${REPO_BASE_URL}/version.txt"
 LOCAL_VERSION_FILE="/usr/lib/enigma2/python/Plugins/Extensions/FuryBiss/version.txt"
 PLUGIN_DIR="/usr/lib/enigma2/python/Plugins/Extensions/FuryBiss"
 
-# 1. Detect Architecture (arm or mipsel)
+# 1. Detect Architecture
 echo "Checking system architecture..."
 SYS_ARCH=$(uname -m)
 case $SYS_ARCH in
-    armv*|aarch64)
+    armv*|aarch32)
         ARCH="arm"
+        ;;
+    aarch64)
+        ARCH="aarch64"
         ;;
     mips*)
         ARCH="mipsel"
@@ -29,7 +32,17 @@ esac
 echo "Detected Architecture: $ARCH"
 echo ""
 
-# 2. Detect Python version on the receiver
+# 2. Detect Image Type (DreamOS vs Open Source)
+IS_DREAMOS=false
+if grep -qi "opendreambox" /etc/issue /etc/os-release /etc/image-version 2>/dev/null; then
+    IS_DREAMOS=true
+    echo "Detected Image Type: DreamOS (opendreambox)"
+else
+    echo "Detected Image Type: Open Source / Others"
+fi
+echo ""
+
+# 3. Detect Python version on the receiver
 echo "Checking Python version..."
 PY_BIN=""
 PY_VER=$(python -c 'import sys; print(str(sys.version_info[0])+"."+str(sys.version_info[1]))' 2>/dev/null)
@@ -60,10 +73,15 @@ case $PY_VER in
 esac
 echo ""
 
-# 3. Ensure curl exists
+# 4. Ensure curl exists
 echo "Checking if curl is installed..."
 if ! command -v curl >/dev/null 2>&1; then
-    opkg install curl
+    if [ "$IS_DREAMOS" = true ]; then
+        apt-get update > /dev/null 2>&1
+        apt-get install -y curl
+    else
+        opkg install curl
+    fi
 fi
 sleep 1
 
@@ -89,7 +107,7 @@ sys.exit(0 if left > right else 1)
 PY
 }
 
-# 4. Compare local version.txt with the remote version.txt before deleting anything
+# 5. Compare local version.txt with the remote version.txt before deleting anything
 LOCAL_VERSION=""
 if [ -f "$LOCAL_VERSION_FILE" ]; then
     LOCAL_VERSION=$(normalize_version "$(cat "$LOCAL_VERSION_FILE" 2>/dev/null)")
@@ -109,18 +127,20 @@ else
 fi
 echo ""
 
-# 5. Remove the old version completely
+# 6. Remove the old version completely
 echo "Removing old versions of FuryBiss completely..."
 sleep 1
 
-# Clean the tmp directory from any previous installation files for the plugin
-rm -f /tmp/furybiss_*.ipk
+rm -f /tmp/furybiss_*
 
-# Remove old packages with force-depends to avoid the uninstallation process getting stuck
-opkg remove enigma2-plugin-extensions-furybiss --force-depends > /dev/null 2>&1
-opkg remove enigma2-plugin-extensions-furybis --force-depends > /dev/null 2>&1
+if [ "$IS_DREAMOS" = true ]; then
+    apt-get remove -y enigma2-plugin-extensions-furybiss > /dev/null 2>&1
+    apt-get remove -y enigma2-plugin-extensions-furybis > /dev/null 2>&1
+else
+    opkg remove enigma2-plugin-extensions-furybiss --force-depends > /dev/null 2>&1
+    opkg remove enigma2-plugin-extensions-furybis --force-depends > /dev/null 2>&1
+fi
 
-# Ensure the plugin directory is completely deleted
 if [ -d "$PLUGIN_DIR" ] ; then
     rm -rf "$PLUGIN_DIR"
     echo "- Old folder /FuryBiss deleted permanently."
@@ -129,23 +149,26 @@ else
 fi
 echo ""
 
-# 6. Download the package that matches the Python version AND Architecture
+# 7. Download the package
 cd /tmp || exit 1
 
-# Combine architecture and Python version in the file name
-FILE_NAME="furybiss_${PY_VER}_${ARCH}.ipk"
+# تحديد اسم الملف بناءً على نوع الصورة
+if [ "$IS_DREAMOS" = true ]; then
+    FILE_NAME="furybiss_${PY_VER}_${ARCH}_dreamos.deb"
+else
+    FILE_NAME="furybiss_${PY_VER}_${ARCH}.ipk"
+fi
+
 DOWNLOAD_URL="${REPO_BASE_URL}/${FILE_NAME}"
 
-echo "Downloading FuryBiss package for Python ${PY_VER} (${ARCH})..."
+echo "Downloading FuryBiss package: ${FILE_NAME} ..."
 
-# Download using curl, with wget as a fallback
 if command -v curl >/dev/null 2>&1; then
     curl -fSLk "${DOWNLOAD_URL}" -o "/tmp/${FILE_NAME}"
 else
     wget -q --no-check-certificate "${DOWNLOAD_URL}" -O "/tmp/${FILE_NAME}"
 fi
 
-# Check if the file exists and verify its size
 if [ ! -s "/tmp/${FILE_NAME}" ] || [ $(stat -c%s "/tmp/${FILE_NAME}") -lt 1000 ]; then
     echo "Error: Failed to download ${FILE_NAME} or file is corrupted."
     echo "Please check if the file exists on the GitHub repository."
@@ -154,11 +177,20 @@ if [ ! -s "/tmp/${FILE_NAME}" ] || [ $(stat -c%s "/tmp/${FILE_NAME}") -lt 1000 ]
 fi
 sleep 1
 
-# 7. Install the update
+# 8. Install the update
 echo ""
 echo "Installing new version...."
-opkg install --force-reinstall --force-overwrite "/tmp/${FILE_NAME}"
-if [ $? -ne 0 ]; then
+
+if [ "$IS_DREAMOS" = true ]; then
+    dpkg -i "/tmp/${FILE_NAME}"
+    apt-get install -f -y
+    INSTALL_RESULT=$?
+else
+    opkg install --force-reinstall --force-overwrite "/tmp/${FILE_NAME}"
+    INSTALL_RESULT=$?
+fi
+
+if [ $INSTALL_RESULT -ne 0 ]; then
     echo "Error: Installation of FuryBiss failed."
     rm -f "/tmp/${FILE_NAME}"
     exit 1
@@ -179,10 +211,14 @@ echo "                   FuryBiss Installed Successfully                      "
 echo "------------------------------------------------------------------------"
 echo ""
 
-# 8. Restart Enigma2 GUI
+# 9. Restart Enigma2 GUI
 echo "Please wait..."
 echo "Restarting Enigma2 GUI in 3 seconds to apply changes..."
 sleep 3
-killall -9 enigma2
+if command -v systemctl >/dev/null 2>&1; then
+    systemctl restart enigma2
+else
+    killall -9 enigma2
+fi
 
 exit 0
