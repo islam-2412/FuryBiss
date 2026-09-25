@@ -261,7 +261,7 @@ echo ""
 # ==============================================================================
 print_divider
 echo -e "${GREEN}             FuryBiss Installed Successfully!               ${NC}"
-echo -e "${MAGENTA}                       Long live Egypt.               ${NC}"
+echo -e "${YELLOW}                        Long live Egypt.               ${NC}"
 echo -e "${CYAN}             Please wait... Restarting Enigma2 GUI...             ${NC}"
 print_divider
 
