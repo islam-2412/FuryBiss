@@ -74,7 +74,7 @@ download_file() {
 # ==============================================================================
 clear
 print_divider
-echo -e "${GREEN}          ✨ Installing FuryBiss Plugin (Smart Install) ✨        ${NC}"
+echo -e "${GREEN}                         Installing FuryBiss Plugin         ${NC}"
 echo -e "${MAGENTA}                 Maintainer: Islam Salama (Abou Yassin)               ${NC}"
 print_divider
 echo ""
