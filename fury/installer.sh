@@ -260,7 +260,8 @@ echo ""
 # نهاية التثبيت
 # ==============================================================================
 print_divider
-echo -e "${GREEN}             FuryBiss Installed Successfully!               ${NC}"
+echo -e "${GREEN}               FuryBiss Installed Successfully!               ${NC}"
+echo -e "${YELLOW}                      ♥ LONG LIFE EGYPT ♥               ${NC}"
 echo -e "${CYAN}             Please wait... Restarting Enigma2 GUI...             ${NC}"
 print_divider
 
